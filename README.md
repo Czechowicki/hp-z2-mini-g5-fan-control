@@ -35,7 +35,7 @@ and let a temperature→speed curve manage it continuously.
 ## Install
 
 ```bash
-git clone https://github.com/<your-user>/hp-z2-mini-g5-fan-control.git
+git clone https://github.com/Czechowicki/hp-z2-mini-g5-fan-control.git
 cd hp-z2-mini-g5-fan-control
 sudo ./install.sh
 ```
