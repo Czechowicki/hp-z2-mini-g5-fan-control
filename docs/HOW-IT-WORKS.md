@@ -21,12 +21,12 @@ to override from the OS:
    fan-floor option exists, but it is written to NVRAM and takes effect at the
    next reboot — useless for dynamic control, and it wears flash.
 
-## The observation
+## Firmware route
 
-HP's own **UEFI Diagnostics → Component Tests → Fan → Fan Speed Test** spins the
-fan up and down on demand, at runtime, from firmware. So a runtime path to set
-the fan speed clearly exists — it just runs in SMM, where the write-lock can be
-lifted. The goal was to reproduce that one transaction from the OS.
+The driver implements the thermal SMM request found during analysis of HP
+firmware and diagnostic software. Diagnostic menu availability varies. On the
+reviewed board the Linux transaction can be observed through the CPU fan
+tachometer and the acknowledged minimum command.
 
 ## The interface
 
@@ -93,13 +93,13 @@ With the mutex held:
 To raise the floor to 60%: op `0x09`, payload `[60]`. To hand control back to the
 firmware: op `0x0a`, payload `[1]`.
 
-## Why it's safe to call often
+## Acknowledgement and timeout
 
-The handler applies the value to the hardware monitor's **RAM**, not to NVRAM or
-flash. That is the whole reason a continuous software curve is viable: unlike the
-BIOS fan-floor setting, writing it thousands of times a day costs nothing and
-wears nothing. On unload the module issues the restore op so the fan returns to
-full firmware AUTO.
+The runtime request targets the hardware monitor's RAM. On normal unload
+after an acknowledged minimum, the module requests restore. If firmware leaves
+the doorbell pending past the polling limit, the driver returns `ETIMEDOUT`,
+publishes `min=-2` and blocks further commands. The tachometer provides a
+separate observation of the fan response.
 
 ## Verifying on your own machine
 
@@ -117,6 +117,6 @@ All of them carry the same DMI guard and refuse to load on other boards.
 
 - Addresses here (`0xC3EF9000`, `0xfc0`, `0x504`, the `0xf7` bit, the mutex path)
   are specific to board 8755 / BIOS S50. On another board or a very different BIOS
-  the DSDT names and the SMM region address can differ. The DMI guard is there so
-  the module simply won't load where these are unverified.
+  the DSDT names and the SMM region address can differ. The module checks board and product at load.
+  The source installer also checks the specific BIOS version and DSDT digest.
 - This is unofficial and unsupported by HP. Use at your own risk.

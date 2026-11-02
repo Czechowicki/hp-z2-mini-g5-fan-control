@@ -10,11 +10,11 @@
  *
  * debugfs /sys/kernel/debug/hp_smm_fan/ (root):
  *   set   zapis "0".."100" -> ustaw minimum % na kanale CPU (0) na zywo
- *         zapis "auto"      -> restore (oddaj pelne AUTO firmware)
+ *         zapis "auto"      -> wyslij zadanie przywrocenia
  *   rpm   odczyt            -> biezace obroty CPU Fan
- *   min   odczyt            -> ostatnio ustawione minimum % (-1 = auto)
+ *   min   odczyt            -> cache polecenia (-1 = start/auto, -2 = wynik nieznany)
  *
- * Przy wyladowaniu modul przywraca AUTO.
+ * Przy wyladowaniu modul zleca AUTO, gdy znany jest ostatni zapis minimum.
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -42,6 +42,8 @@
 #define REG_TACH0	0x504
 #define OP_MIN		0x09
 #define OP_RESTORE	0x0a
+#define MIN_AUTO	(-1)
+#define MIN_UNKNOWN	(-2)
 
 #define HPSF_PHYS	0xC3EF9000UL
 #define HPSF_LEN	0xB0
@@ -52,13 +54,16 @@
 #define AML_MUTEX	"\\_SB.WMIS.HHHM"
 #define AML_TIMEOUT	1000
 
+/* Indicates timeout latching with the original one-write command interface. */
+static u32 control_abi = 2;
+
 static struct {
 	struct mutex lock;
 	acpi_handle aml;
 	struct resource *region;
 	void __iomem *hpsf;
 	struct dentry *dir;
-	int cur_min;	/* -1 = auto */
+	int cur_min;	/* chronione przez g.lock */
 } g;
 
 static int lock_hw(void)
@@ -183,37 +188,32 @@ static int smm_cmd_locked(u8 op, u16 count, const u8 *payload, unsigned int plen
 			return 0;
 		udelay(500);
 	}
-	doorbell_w(0x00);
-	return -EIO;
+	/* Firmware may still own this request and the shared payload. */
+	return -ETIMEDOUT;
 }
 
-static int apply_min(int percent)
+static int apply_setting(int minimum)
 {
-	u8 pl[1] = { (u8)percent };
+	bool restore = minimum == MIN_AUTO;
+	u8 payload = restore ? 1 : minimum;
 	int ret;
 
 	ret = lock_hw();
 	if (ret)
 		return ret;
-	ret = smm_cmd_locked(OP_MIN, 1, pl, 1);
-	unlock_hw();
-	if (!ret)
-		g.cur_min = percent;
-	return ret;
-}
 
-static int apply_auto(void)
-{
-	u8 pl[1] = { 1 };
-	int ret;
-
-	ret = lock_hw();
-	if (ret)
-		return ret;
-	ret = smm_cmd_locked(OP_RESTORE, 1, pl, 1);
+	if (g.cur_min == MIN_UNKNOWN) {
+		ret = -EUCLEAN;
+	} else {
+		ret = smm_cmd_locked(restore ? OP_RESTORE : OP_MIN, 1, &payload, 1);
+		if (!ret)
+			g.cur_min = minimum;
+		else if (ret == -ETIMEDOUT) {
+			g.cur_min = MIN_UNKNOWN;
+			pr_err("SMM completion unknown; control writes disabled for this module instance\n");
+		}
+	}
 	unlock_hw();
-	if (!ret)
-		g.cur_min = -1;
 	return ret;
 }
 
@@ -221,20 +221,22 @@ static ssize_t set_write(struct file *file, const char __user *ubuf,
 			 size_t count, loff_t *ppos)
 {
 	char buf[16];
+	char *value;
 	int ret, v;
 
-	if (count >= sizeof(buf))
+	if (!count || count >= sizeof(buf))
 		return -EINVAL;
 	if (copy_from_user(buf, ubuf, count))
 		return -EFAULT;
-	buf[count] = '\0';
-	if (!strncmp(buf, "auto", 4)) {
-		ret = apply_auto();
-		return ret ? ret : count;
-	}
-	if (kstrtoint(strim(buf), 10, &v) || v < 0 || v > 100)
+	if (memchr(buf, '\0', count))
 		return -EINVAL;
-	ret = apply_min(v);
+	buf[count] = '\0';
+	value = strim(buf);
+	if (!strcmp(value, "auto"))
+		v = MIN_AUTO;
+	else if (kstrtoint(value, 10, &v) || v < 0 || v > 100)
+		return -EINVAL;
+	ret = apply_setting(v);
 	return ret ? ret : count;
 }
 
@@ -259,7 +261,9 @@ DEFINE_DEBUGFS_ATTRIBUTE(rpm_fops, rpm_get, NULL, "%llu\n");
 
 static int min_get(void *data, u64 *val)
 {
+	mutex_lock(&g.lock);
 	*val = (u64)(s64)g.cur_min;
+	mutex_unlock(&g.lock);
 	return 0;
 }
 DEFINE_DEBUGFS_ATTRIBUTE(min_fops, min_get, NULL, "%lld\n");
@@ -276,8 +280,10 @@ static int __init hp_smm_fan_init(void)
 		return -ENODEV;
 
 	mutex_init(&g.lock);
-	g.cur_min = -1;
+	g.cur_min = MIN_AUTO;
 	g.region = request_region(HWM_BASE, HWM_LEN, KBUILD_MODNAME);
+	if (!g.region)
+		return -EBUSY;
 	g.hpsf = acpi_os_map_memory(HPSF_PHYS, HPSF_LEN);
 	if (!g.hpsf) {
 		pr_err("nie zmapowano HPSF\n");
@@ -287,6 +293,14 @@ static int __init hp_smm_fan_init(void)
 	}
 
 	g.dir = debugfs_create_dir(KBUILD_MODNAME, NULL);
+	if (IS_ERR_OR_NULL(g.dir)) {
+		int err = g.dir ? PTR_ERR(g.dir) : -ENOMEM;
+
+		acpi_os_unmap_memory(g.hpsf, HPSF_LEN);
+		release_region(HWM_BASE, HWM_LEN);
+		return err;
+	}
+	debugfs_create_u32("control_abi", 0400, g.dir, &control_abi);
 	debugfs_create_file("set", 0200, g.dir, NULL, &set_fops);
 	debugfs_create_file("rpm", 0444, g.dir, NULL, &rpm_fops);
 	debugfs_create_file("min", 0444, g.dir, NULL, &min_fops);
@@ -300,8 +314,10 @@ module_init(hp_smm_fan_init);
 static void __exit hp_smm_fan_exit(void)
 {
 	debugfs_remove_recursive(g.dir);
-	if (g.cur_min != -1)
-		apply_auto();	/* oddaj AUTO przy wyladowaniu */
+	if (g.cur_min >= 0 && apply_setting(MIN_AUTO))
+		pr_err("restore request failed during unload\n");
+	if (g.cur_min == MIN_UNKNOWN)
+		pr_err("unloading with unknown firmware state\n");
 	if (g.hpsf)
 		acpi_os_unmap_memory(g.hpsf, HPSF_LEN);
 	if (g.region)

@@ -1,56 +1,58 @@
 # hp-z2-mini-g5-fan-control
 
-Live, dynamic CPU-fan control on the **HP Z2 Mini G5** from Linux — without
-capping the CPU, without a reboot, and without touching BIOS/NVRAM.
+A Linux driver and a temperature-based CPU fan curve for the HP Z2 Mini G5.
+The daemon reads the CPU package temperature and asks HP firmware to change the
+minimum fan speed. Firmware can raise the fan above that minimum. Your curve
+lives in `/etc/hp-fan.conf`.
 
-The Z2 Mini G5's firmware runs the CPU fan on a conservative curve: under
-sustained load the chassis gets hot while the fan stays lazy, and there is no
-documented OS-level knob to make it spin faster. The hardware-monitor write-lock
-blocks the OS from writing fan registers directly. This project drives the fan
-through the **same SMM service the HP UEFI Diagnostics "Fan Speed Test" uses** —
-reproduced from the running OS — so you can set a *minimum* fan speed on the fly
-and let a temperature→speed curve manage it continuously.
+## ABI 2 update
 
-- Full CPU performance — this raises the fan floor, it does **not** throttle, cap,
-  or RAPL-limit the CPU.
-- Live — changes apply immediately, no reboot.
-- Non-persistent at the hardware level — it writes to the hardware-monitor RAM
-  via SMM, not to flash/NVRAM, so there is no flash wear from frequent updates.
-- Safe default — the module restores full firmware **AUTO** control on unload,
-  and the daemon restores AUTO on exit.
+- Rising temperatures can raise the minimum on the next sample, even by one
+  percentage point. The five-point default deadband applies to decreases.
+- If firmware times out, the driver leaves the pending request in place and
+  blocks additional control writes for that module instance. The daemon exits
+  on a control error. The service suppresses automatic restarts for exit 79.
+- On orderly shutdown after a successful minimum request the daemon requests
+  AUTO once. An acknowledgement means firmware cleared the request. The full
+  internal firmware state after restore is unknown.
 
-> ⚠️ **Hardware-specific.** It was reverse-engineered and tested on one exact
-> machine (see *Requirements*). The module refuses to load on anything else via a
-> DMI board/product guard. Do not run it on other HP models without verifying the
-> register map yourself — poking SMM/Super-I/O on the wrong board can hang it.
-> Provided as-is, no warranty. See [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+The matched ABI 2 driver and daemon were observed running on board **8755**,
+BIOS **S50 Ver. 01.04.20**, Ubuntu 24.04, kernel **6.8.0-147-generic**.
+The host reported an acknowledged minimum of **24%**. Measured RPM comes from
+the tachometer. Peak temperatures with this revision under load remain unknown.
 
-## Requirements
+## Install from source on Ubuntu
 
-- HP Z2 Mini G5 Workstation, board **8755** (enforced by a DMI guard in the module).
-- BIOS S50 family (tested on 01.04.20 and 01.05.00 — identical Super-I/O layout).
-- Linux with kernel headers, `make`, `dkms`. Tested on Ubuntu 24.04, kernel 6.8.
-- Root. Secure Boot is fine — DKMS signs the module with your enrolled MOK.
+If you already installed the kernel-specific ABI 2 bundle and its status is
+`ABI2_ACTIVE`, you already have this driver and daemon. The extracted folder
+can be deleted. Keep its original ZIP somewhere accessible and extract it again
+when you need `instaluj.py status` or `instaluj.py rollback`.
 
-## Install
+For a source install or a source upgrade from DKMS 1.0, use the reviewed BIOS,
+board and DSDT. Install DKMS, build tools and headers for the kernel that will
+boot. If Secure Boot is enabled, your kernel must trust the DKMS signing key.
 
 ```bash
+sudo apt install dkms build-essential linux-headers-$(uname -r)
 git clone https://github.com/Czechowicki/hp-z2-mini-g5-fan-control.git
 cd hp-z2-mini-g5-fan-control
 sudo ./install.sh
 ```
 
-This builds and installs the module via DKMS (so it rebuilds automatically on
-kernel upgrades), installs the daemon to `/usr/local/sbin/fan-daemon.py`, the
-config to `/etc/hp-fan.conf`, and enables the `hp-fan` systemd service.
-
-Check it:
+The installer stages DKMS **1.1** for the running kernel, checks which module is
+selected on disk, refreshes its initramfs when present, and enables `hp-fan.service`.
+It keeps the existing curve and earlier DKMS sources. Schedule a reboot into the
+staged kernel after the installer reports success. From the new boot, check:
 
 ```bash
-systemctl status hp-fan
-sudo cat /sys/kernel/debug/hp_smm_fan/rpm   # current CPU-fan RPM
-sudo cat /sys/kernel/debug/hp_smm_fan/min   # current minimum % (-1 = AUTO)
+sudo cat /sys/kernel/debug/hp_smm_fan/control_abi  # expected: 2
+systemctl is-active hp-fan.service                # expected: active
+sudo cat /sys/kernel/debug/hp_smm_fan/min         # last acknowledged request
 ```
+
+A value of `-1` is the initial/AUTO cache. A value of `-2` means that firmware
+completion is unknown. In that case preserve the kernel and service logs before
+considering recovery. Unloading the module discards its in-memory fault latch.
 
 ## The fan curve
 
@@ -71,10 +73,14 @@ yourself out with a typo.
 
 Between points the daemon interpolates linearly. Values below the first
 temperature use the first percentage; above the last, the last. Add as many
-points as you like (minimum two valid points, `0<=temp<=120`, `0<=percent<=100`).
+points as you like (minimum two, `0<=temp<=120`, `0<=percent<=100`).
+Temperatures must be distinct. The minimum must stay level or increase with
+temperature. A malformed line invalidates the whole curve. Higher requests
+apply at the next sample. The `--step` deadband applies to decreases.
 
-Uninstall / go back to stock behavior: `sudo systemctl disable --now hp-fan`
-then `sudo modprobe -r hp_smm_fan` (both restore firmware AUTO).
+To stop curve control on an ordinary source installation: `sudo systemctl disable --now hp-fan`
+then `sudo modprobe -r hp_smm_fan` on a normal shutdown. An ambiguous command
+requires review. Reloading the module discards its in-memory fault latch.
 
 ## Manual control (without the daemon)
 
@@ -102,8 +108,7 @@ The module acquires the firmware's ACPI mutex (to serialize with
 `hp-wmi-sensors`), writes a small command buffer into the HP SMM command region,
 rings the hardware-monitor doorbell register, and pulses the Super-I/O event bit
 that raises the SMI. The SMM handler — which, unlike the OS, is allowed to lift
-the hardware-monitor write-lock — applies the requested fan minimum. It's the
-exact transaction the HP UEFI diagnostic performs, issued at runtime instead.
+the hardware-monitor write-lock — applies the requested fan minimum. The driver uses this transaction to request a fan minimum while Linux is running.
 Full details, register map and safety reasoning in
 [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
