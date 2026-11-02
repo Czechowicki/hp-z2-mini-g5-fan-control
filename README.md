@@ -112,6 +112,12 @@ the hardware-monitor write-lock — applies the requested fan minimum. The drive
 Full details, register map and safety reasoning in
 [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
+## Contributors
+
+- [Czechowicki](https://github.com/Czechowicki) maintains the project and tested fan control on the HP Z2 Mini G5.
+- [Claude](https://github.com/claude) helped develop the original SMM driver and fan curve daemon.
+- [OpenAI Codex](https://github.com/codex) contributed the ABI 2 timeout handling, daemon shutdown fixes, and offline regression tests.
+
 ## License
 
 GPL-2.0-or-later. See [LICENSE](LICENSE). This is independent, interoperability
