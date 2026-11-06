@@ -1,0 +1,55 @@
+#!/usr/bin/python3 -I
+"""hp-fan.service selects its client by the identity of the loaded module."""
+import hashlib
+import os
+from pathlib import Path
+import sys
+
+KERNEL = "6.8.0-147-generic"
+LIB = Path("/usr/local/lib/hp-z2-fan-abi2-147")
+LEGACY = Path("/usr/local/sbin/fan-daemon.py")
+NOTE = Path("/sys/module/hp_smm_fan/notes/.note.gnu.build-id")
+OLD_NOTE = "cd39400dd1c370f602061843b73a176173f003cb08a8e6f5e64df73b5a906397"
+NEW_NOTE = "32524abdaa1fa31d6e6de6c1063dd6126998e182fdb6bc705e9ff66c2f691c77"
+OLD_SRC = "AB609EB0420D9B734DA95B7"
+OLD_CLIENT = "153e6cc869b4826f4a95c2c1d1ad2421231b89d54acb9f562c6e48f9abeccc0e"
+NEW_CLIENT = "fa57684564312bb11484327aa445fa8a740bc774b64b03f6383e6df2ef5fbd88"
+DSDT = "88067a83dc0a13b1b07d4e16d17ddfb0f97e2b3002454e8ca9985daf4d040e97"
+ABI = Path("/sys/kernel/debug/hp_smm_fan/control_abi")
+TRIAL = ABI.with_name("protocol")
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def identify():
+    expected = {"sys_vendor": "HP", "board_name": "8755",
+                "product_name": "HP Z2 Mini G5 Workstation", "bios_version": "S50 Ver. 01.04.20"}
+    for name, value in expected.items():
+        if (Path("/sys/class/dmi/id") / name).read_text().strip() != value:
+            raise ValueError("DMI mismatch: " + name)
+    if digest(Path("/sys/firmware/acpi/tables/DSDT")) != DSDT:
+        raise ValueError("DSDT mismatch")
+    release = os.uname().release
+    build = digest(NOTE)
+    if release == KERNEL and build == NEW_NOTE and ABI.read_text().strip() == "2" and not TRIAL.exists():
+        return LIB / "fan-daemon.py", NEW_CLIENT
+    if not ABI.exists() and not TRIAL.exists():
+        if release == KERNEL and build == OLD_NOTE:
+            return LEGACY, OLD_CLIENT
+        if release != KERNEL and NOTE.parents[1].joinpath("srcversion").read_text().strip() == OLD_SRC:
+            return LEGACY, OLD_CLIENT
+    raise ValueError("unrecognized running module or control interface")
+
+
+if __name__ == "__main__":
+    try:
+        client, expected_hash = identify()
+        if digest(client) != expected_hash:
+            raise ValueError("unexpected client hash")
+        print("hp-fan selected " + str(client), flush=True)
+        os.execv("/usr/bin/python3", ["python3", "-I", "-B", str(client), "--interval", "3"])
+    except (OSError, ValueError) as exc:
+        print("hp-fan refused: " + str(exc), file=sys.stderr)
+        sys.exit(79)

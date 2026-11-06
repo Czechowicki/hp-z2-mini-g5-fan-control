@@ -1,0 +1,39 @@
+test_147_delegates_to_existing_selector (__main__.BootGuardTests.test_147_delegates_to_existing_selector) ... ok
+test_147_modified_selector_refused (__main__.BootGuardTests.test_147_modified_selector_refused) ... ok
+test_149_success (__main__.BootGuardTests.test_149_success) ... ok
+test_daemon_modified (__main__.BootGuardTests.test_daemon_modified) ... ok
+test_loaded_mismatch (__main__.BootGuardTests.test_loaded_mismatch) ... ok
+test_platform_rejected_before_disk (__main__.BootGuardTests.test_platform_rejected_before_disk) ... ok
+test_unknown_firmware_result (__main__.BootGuardTests.test_unknown_firmware_result) ... ok
+test_wrong_abi (__main__.BootGuardTests.test_wrong_abi) ... ok
+test_default_plan_has_no_host_access (__main__.GuardTests.test_default_plan_has_no_host_access) ... ok
+test_elf_bounds (__main__.GuardTests.test_elf_bounds) ... ok
+test_elf_note (__main__.GuardTests.test_elf_note) ... ok
+test_kernel_scope (__main__.GuardTests.test_kernel_scope) ... ok
+test_no_live_mutating_commands (__main__.GuardTests.test_no_live_mutating_commands) ... ok
+test_old_dkms_source_no_hooks (__main__.GuardTests.test_old_dkms_source_no_hooks) ... ok
+test_package_hashes (__main__.GuardTests.test_package_hashes) ... ok
+test_secure_rejects_user_file (__main__.GuardTests.test_secure_rejects_user_file) ... ok
+test_changed_pid_not_reported_success (__main__.StageFixture.test_changed_pid_not_reported_success) ... ok
+test_command_failure_1 (__main__.StageFixture.test_command_failure_1) ... ok
+test_command_failure_2 (__main__.StageFixture.test_command_failure_2) ... ok
+test_command_failure_3 (__main__.StageFixture.test_command_failure_3) ... ok
+test_command_failure_4 (__main__.StageFixture.test_command_failure_4) ... ok
+test_command_failure_5 (__main__.StageFixture.test_command_failure_5) ... ok
+test_command_failure_6 (__main__.StageFixture.test_command_failure_6) ... ok
+test_existing_state_refuses (__main__.StageFixture.test_existing_state_refuses) ... ok
+test_framework_refusal_before_writes (__main__.StageFixture.test_framework_refusal_before_writes) ... ok
+test_initrd_verification_failure (__main__.StageFixture.test_initrd_verification_failure) ... ok
+test_missing_headers_before_writes (__main__.StageFixture.test_missing_headers_before_writes) ... ok
+test_rollback_additional_kernel_refuses (__main__.StageFixture.test_rollback_additional_kernel_refuses) ... ok
+test_rollback_after_build_failure (__main__.StageFixture.test_rollback_after_build_failure) ... ok
+test_rollback_modified_payload_refuses (__main__.StageFixture.test_rollback_modified_payload_refuses) ... ok
+test_rollback_service_failure_keeps_recovery_state (__main__.StageFixture.test_rollback_service_failure_keeps_recovery_state) ... ok
+test_source_collision_before_writes (__main__.StageFixture.test_source_collision_before_writes) ... ok
+test_success (__main__.StageFixture.test_success) ... ok
+test_wrong_loaded_kernel_before_writes (__main__.StageFixture.test_wrong_loaded_kernel_before_writes) ... ok
+
+----------------------------------------------------------------------
+Ran 34 tests in 0.134s
+
+OK

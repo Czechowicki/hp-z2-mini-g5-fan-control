@@ -21,12 +21,31 @@ BIOS **S50 Ver. 01.04.20**, Ubuntu 24.04, kernel **6.8.0-147-generic**.
 The host reported an acknowledged minimum of **24%**. Measured RPM comes from
 the tachometer. Peak temperatures with this revision under load remain unknown.
 
+## DKMS migration for the kernel-specific ABI 2 bundle
+
+The migration to **DKMS 1.1.1** was confirmed on the same board and BIOS with
+kernel **6.8.0-149-generic** on 2026-11-06. The status tool reported
+`DKMS_ABI2_ACTIVE`, `control_abi: 2` and the matched daemon. Its cached minimum
+was **22%**; this status did not measure RPM or validate cooling under load.
+
+The [migration package](migrations/abi2-dkms-1.1.1) preserves the working 147
+installation and existing curve, stages the same ABI 2 code for 149, and enables
+DKMS builds for subsequent **6.8.0-N-generic kernels with N >= 149** on x86-64.
+It does not reload the running module or restart the fan service during staging.
+
+Use the [migration and recovery instructions](docs/DKMS-MIGRATION.md) for an
+existing kernel-specific bundle. If your status is already `DKMS_ABI2_ACTIVE`,
+no reinstall is needed. Packaging version 1.1.1 retains the same driver and daemon
+code as source release 1.1. Other kernel families and firmware changes require
+separate review.
+
 ## Install from source on Ubuntu
 
-If you already installed the kernel-specific ABI 2 bundle and its status is
-`ABI2_ACTIVE`, you already have this driver and daemon. The extracted folder
-can be deleted. Keep its original ZIP somewhere accessible and extract it again
-when you need `instaluj.py status` or `instaluj.py rollback`.
+The ordinary source installer below is for installations without the
+kernel-specific bundle. It refuses bundle-managed installations. Use the
+[migration route](docs/DKMS-MIGRATION.md) to carry that bundle forward to 149.
+Keep the original bundle ZIP and migration package for their respective status
+and recovery tools; do not mix their rollback commands.
 
 For a source install or a source upgrade from DKMS 1.0, use the reviewed BIOS,
 board and DSDT. Install DKMS, build tools and headers for the kernel that will
@@ -100,6 +119,7 @@ echo auto | sudo tee /sys/kernel/debug/hp_smm_fan/set   # back to firmware AUTO
 | `hp-fan.service` | systemd unit. |
 | `Makefile`, `dkms.conf`, `install.sh` | Build & DKMS install. |
 | `tools/` | Read-only probe + diagnostic modules used to verify the path. |
+| `migrations/abi2-dkms-1.1.1/` | Verified 147-bundle to 149 DKMS migration, preserved package and offline tests. |
 | `docs/HOW-IT-WORKS.md` | The reverse-engineering writeup. |
 
 ## How it works (short version)

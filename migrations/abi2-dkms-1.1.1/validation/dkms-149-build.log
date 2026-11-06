@@ -1,0 +1,13 @@
+DKMS make.log for hp_smm_fan-1.1.1 for kernel 6.8.0-149-generic (x86_64)
+Fri Nov  6 14:49:51 CET 2026
+make: Entering directory '/tmp/hp-dkms-migration-20261106-kyENgL83/headers/usr/src/linux-headers-6.8.0-149-generic'
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  You are using:           gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  CC [M]  /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/build/hp_smm_fan.o
+  MODPOST /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/build/Module.symvers
+  CC [M]  /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/build/hp_smm_fan.mod.o
+  LD [M]  /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/build/hp_smm_fan.ko
+  BTF [M] /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/build/hp_smm_fan.ko
+Skipping BTF generation for /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/build/hp_smm_fan.ko due to unavailability of vmlinux
+make: Leaving directory '/tmp/hp-dkms-migration-20261106-kyENgL83/headers/usr/src/linux-headers-6.8.0-149-generic'

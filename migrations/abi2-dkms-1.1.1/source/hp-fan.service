@@ -1,0 +1,17 @@
+[Unit]
+Description=HP Z2 Mini G5 - CPU fan curve (SMM)
+After=systemd-modules-load.service
+
+[Service]
+Type=simple
+# the module must be loaded; DKMS + modules-load.d normally handles this
+ExecStartPre=/sbin/modprobe -q hp_smm_fan
+ExecStart=/usr/local/sbin/fan-daemon.py --interval 3
+Restart=on-failure
+RestartPreventExitStatus=79
+# on stop the daemon restores firmware AUTO itself (SIGTERM)
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

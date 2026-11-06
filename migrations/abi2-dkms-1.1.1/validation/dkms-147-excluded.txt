@@ -1,0 +1,6 @@
+Sign command: /usr/bin/kmodsign
+Binary update-secureboot-policy not found, modules won't be signed
+Error! The /tmp/hp-dkms-migration-20261106-kyENgL83/dkms-test/db/hp_smm_fan/1.1.1/6.8.0-147-generic/x86_64/dkms.conf for module hp_smm_fan includes a BUILD_EXCLUSIVE directive which does not match this kernel/arch/config.
+This indicates that it should not be built.
+
+exit=77

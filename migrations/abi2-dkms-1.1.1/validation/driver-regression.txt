@@ -1,0 +1,1 @@
+PASS: compiled driver transactions in RAM, daemon error and signal paths, ABI, curve and service exit policy
